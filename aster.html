@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Juego de Naves</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: black;
+        }
+        canvas {
+            display: block;
+            background: url('fondo.gif') no-repeat center center;
+            background-size: cover;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        let gameOver = false;
+        let score = 0;  // Contador de asteroides destruidos
+
+        // Cargar imágenes
+        const shipImage = new Image();
+        shipImage.src = 'nave.gif';
+
+        const bulletImage = new Image();
+        bulletImage.src = 'misil.png';
+
+        const ship = {
+            x: canvas.width / 2,
+            y: canvas.height / 2,
+            size: 20,
+            rotation: 0 // Ángulo de rotación de la nave
+        };
+
+        const bullets = [];
+        const rocks = [];
+
+        // Dibuja la nave usando la imagen
+        function drawShip() {
+            ctx.save();
+            ctx.translate(ship.x, ship.y);
+            ctx.rotate(ship.rotation);
+            ctx.drawImage(shipImage, -ship.size, -ship.size, ship.size * 2, ship.size * 2);
+            ctx.restore();
+        }
+
+        // Dibuja los disparos usando la imagen del misil
+        function drawBullets() {
+            bullets.forEach(bullet => {
+                ctx.save();
+                ctx.translate(bullet.x, bullet.y);
+                ctx.rotate(bullet.angle);  // Rotar el misil según la dirección del disparo
+                ctx.drawImage(bulletImage, -10, -20, 20, 40); // Asegúrate de ajustar el tamaño del misil si es necesario
+                ctx.restore();
+            });
+        }
+
+        // Dibuja las rocas con formas irregulares
+        function drawRocks() {
+            rocks.forEach(rock => {
+                ctx.beginPath();
+                ctx.moveTo(
+                    rock.x + rock.size * rock.shape[0].x,
+                    rock.y + rock.size * rock.shape[0].y
+                );
+                for (let i = 1; i < rock.shape.length; i++) {
+                    ctx.lineTo(
+                        rock.x + rock.size * rock.shape[i].x,
+                        rock.y + rock.size * rock.shape[i].y
+                    );
+                }
+                ctx.closePath();
+                ctx.strokeStyle = 'white';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            });
+        }
+
+        // Dibujar marcador de asteroides destruidos
+        function drawScore() {
+            ctx.fillStyle = 'yellow';
+            ctx.font = "24px Arial";
+            ctx.textAlign = "left";
+            ctx.fillText("Asteroides destruidos: " + score, 20, 30);
+        }
+
+        // Generar rocas con formas irregulares de 10 lados
+        function createRock() {
+            const side = Math.random() < 0.5 ? 0 : 1; // Lado desde el que aparece la roca (0 = horizontal, 1 = vertical)
+            const rock = {
+                x: side ? Math.random() * canvas.width : (Math.random() < 0.5 ? 0 : canvas.width),
+                y: !side ? Math.random() * canvas.height : (Math.random() < 0.5 ? 0 : canvas.height),
+                size: 10 + Math.random() * 10, // Tamaño inicial pequeño
+                originalSize: 10 + Math.random() * 10, // Tamaño original
+                speedX: (Math.random() - 0.5) * 2,
+                speedY: (Math.random() - 0.5) * 2,
+                shape: []
+            };
+
+            // Crear una forma irregular usando coordenadas aleatorias en lugar de un círculo perfecto
+            for (let i = 0; i < 10; i++) {
+                const angle = (i * Math.PI * 2) / 10;
+                const radius = 0.7 + Math.random() * 0.6;  // Radio aleatorio para dar la apariencia de irregularidad
+                rock.shape.push({
+                    x: Math.cos(angle) * radius,
+                    y: Math.sin(angle) * radius
+                });
+            }
+
+            rocks.push(rock);
+        }
+
+        // Mover rocas
+        function updateRocks() {
+            rocks.forEach((rock, index) => {
+                // Calcular la distancia al centro de la pantalla
+                const distX = rock.x - ship.x;
+                const distY = rock.y - ship.y;
+                const distance = Math.sqrt(distX * distX + distY * distY);
+
+                // Agrandar la roca a medida que se acerca al centro
+                if (distance < canvas.width / 2) {
+                    rock.size = rock.originalSize + (canvas.width / 2 - distance) / 30;
+                } else {
+                    rock.size = rock.originalSize; // Volver al tamaño original cuando se alejan
+                }
+
+                rock.x += rock.speedX;
+                rock.y += rock.speedY;
+
+                // Colisión con la nave
+                if (distance < rock.size) {
+                    gameOver = true;
+                }
+
+                // Si sale del borde de la pantalla
+                if (
+                    rock.x < 0 || rock.x > canvas.width ||
+                    rock.y < 0 || rock.y > canvas.height
+                ) {
+                    rocks.splice(index, 1);
+                    createRock(); // Crea una nueva roca si sale de la pantalla
+                }
+            });
+        }
+
+        // Mover disparos
+        function updateBullets() {
+            bullets.forEach((bullet, index) => {
+                bullet.x += bullet.speedX;
+                bullet.y += bullet.speedY;
+
+                // Eliminar el disparo si sale de la pantalla
+                if (
+                    bullet.x < 0 || bullet.x > canvas.width ||
+                    bullet.y < 0 || bullet.y > canvas.height
+                ) {
+                    bullets.splice(index, 1);
+                }
+
+                // Verificar colisión con las rocas
+                rocks.forEach((rock, rockIndex) => {
+                    const distX = bullet.x - rock.x;
+                    const distY = bullet.y - rock.y;
+                    const distance = Math.sqrt(distX * distX + distY * distY);
+                    if (distance < rock.size) {
+                        rocks.splice(rockIndex, 1);
+                        bullets.splice(index, 1);
+                        createRock(); // Crear una nueva roca al destruir una
+                        score++; // Incrementar el marcador
+                    }
+                });
+            });
+        }
+
+        // Disparo desde la punta del triángulo (vértice delantero)
+        function shoot(targetX, targetY) {
+            const speed = 5;
+            // Coordenadas de la punta de la nave desde donde sale el disparo
+            const bulletX = ship.x + ship.size * Math.cos(ship.rotation - Math.PI / 2);
+            const bulletY = ship.y + ship.size * Math.sin(ship.rotation - Math.PI / 2);
+            const angle = Math.atan2(targetY - bulletY, targetX - bulletX); // El ángulo hacia donde disparar
+            bullets.push({
+                x: bulletX,
+                y: bulletY,
+                speedX: speed * Math.cos(angle),
+                speedY: speed * Math.sin(angle),
+                angle: angle // Guardar el ángulo para rotar el misil
+            });
+        }
+
+        // Girar la nave hacia el punto de disparo
+        function rotateShipTo(targetX, targetY) {
+            ship.rotation = Math.atan2(targetY - ship.y, targetX - ship.x); // Rotación hacia el clic
+        }
+
+        // Evento de clic/touch para disparar y girar la nave
+        canvas.addEventListener("click", (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const targetX = e.clientX - rect.left;
+            const targetY = e.clientY - rect.top;
+            rotateShipTo(targetX, targetY);  // Gira la nave hacia donde se hizo clic
+            shoot(targetX, targetY);  // Dispara hacia el punto de clic
+        });
+
+        // Juego principal
+        function gameLoop() {
+            if (gameOver) {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = 'white';
+                ctx.font = "48px Arial";
+                ctx.textAlign = "center";
+                ctx.fillText("Game Over", canvas.width / 2, canvas.height / 2);
+                return;
+            }
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Actualizar y dibujar los elementos
+                        // Actualizar y dibujar los elementos
+            drawShip();
+            drawBullets();
+            drawRocks();
+            drawScore();  // Dibuja el marcador de asteroides destruidos
+
+            updateBullets();
+            updateRocks();
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Inicializar el juego
+        for (let i = 0; i < 5; i++) {
+            createRock();
+        }
+        gameLoop();
+
+        // Ajustar el tamaño del canvas al cambiar la ventana
+        window.addEventListener("resize", () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        });
+
+    </script>
+</body>
+</html>
+
+            

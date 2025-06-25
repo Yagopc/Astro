@@ -1,0 +1,197 @@
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Juego de Esferas</title>
+  <style>
+    body, html {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      height: 100%;
+    }
+    #gameContainer {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      background-image: url('fondo.gif');
+      background-size: cover;
+      background-position: center;
+    }
+    #nave {
+      position: absolute;
+      width: 40px;
+      height: 40px;
+      background-image: url('nave.gif');
+      background-size: contain;
+      background-repeat: no-repeat;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+    }
+    .sphere {
+      position: absolute;
+      width: 30px;
+      height: 30px;
+      background-image: url('ball.gif'); /* Imagen ball.gif en lugar de esferas */
+      background-size: contain;
+      background-repeat: no-repeat;
+    }
+    .shot {
+      position: absolute;
+      width: 5px;
+      height: 10px;
+      background-color: white; /* Disparos en blanco */
+    }
+    #score {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      font-size: 20px;
+      font-family: Arial, sans-serif;
+      color: white; /* Marcador en blanco */
+    }
+  </style>
+</head>
+<body>
+
+<div id="gameContainer">
+  <div id="nave"></div>
+  <div id="score">Puntos: 0</div>
+</div>
+
+<script>
+const gameContainer = document.getElementById('gameContainer');
+const nave = document.getElementById('nave');
+const scoreDisplay = document.getElementById('score');
+
+let gameActive = true;
+let maxSpheres = 10;
+let spheres = [];
+let score = 0;
+let sphereSpeed = 0.5; // Velocidad inicial de las esferas
+
+// Crear 5 esferas inicialmente
+for (let i = 0; i < 5; i++) {
+    createSphere();
+}
+
+// Agregar una esfera cada 3 segundos
+setInterval(() => {
+    if (gameActive && spheres.length < maxSpheres) {
+        createSphere();
+    }
+}, 3000);
+
+// Aumentar la dificultad cada 30 segundos
+setInterval(() => {
+    if (gameActive) {
+        sphereSpeed += 0.2; // Aumenta la velocidad de las esferas
+        maxSpheres += 1; // Aumenta el número máximo de esferas
+    }
+}, 30000); // Cada 30 segundos
+
+function createSphere() {
+    const sphere = document.createElement('div');
+    sphere.classList.add('sphere');
+    sphere.style.left = Math.random() * (window.innerWidth - 30) + 'px';
+    sphere.style.top = '-30px';
+    gameContainer.appendChild(sphere);
+    spheres.push(sphere);
+}
+
+function moveSpheres() {
+    spheres.forEach((sphere, index) => {
+        let top = parseFloat(sphere.style.top);
+        sphere.style.top = top + sphereSpeed + 'px'; // Usar la velocidad variable
+
+        // Si una esfera toca la parte inferior
+        if (top >= window.innerHeight - 30) {
+            endGame();
+        }
+    });
+}
+
+function createShot(x, y) {
+    const shot = document.createElement('div');
+    shot.classList.add('shot');
+    
+    const naveCenterX = nave.getBoundingClientRect().left + nave.offsetWidth / 2;
+    const naveCenterY = nave.getBoundingClientRect().top;
+    
+    shot.style.left = naveCenterX + 'px';
+    shot.style.top = naveCenterY + 'px';
+    
+    gameContainer.appendChild(shot);
+    
+    const angle = Math.atan2(y - naveCenterY, x - naveCenterX);
+    moveShot(shot, angle);
+}
+
+function moveShot(shot, angle) {
+    let shotInterval = setInterval(() => {
+        let left = parseFloat(shot.style.left);
+        let top = parseFloat(shot.style.top);
+
+        // Mover el disparo en la dirección del ángulo
+        shot.style.left = left + Math.cos(angle) * 5 + 'px';
+        shot.style.top = top + Math.sin(angle) * 5 + 'px';
+
+        // Verificar si el disparo toca una esfera
+        spheres.forEach((sphere, index) => {
+            if (collision(shot, sphere)) {
+                gameContainer.removeChild(sphere);
+                spheres.splice(index, 1);
+                score++;
+                scoreDisplay.textContent = `Puntos: ${score}`;
+            }
+        });
+
+        // Si el disparo sale de la pantalla
+        if (top <= 0 || top >= window.innerHeight || left <= 0 || left >= window.innerWidth) {
+            clearInterval(shotInterval);
+            gameContainer.removeChild(shot);
+        }
+    }, 10);
+}
+
+function collision(shot, sphere) {
+    const shotRect = shot.getBoundingClientRect();
+    const sphereRect = sphere.getBoundingClientRect();
+    
+    return !(shotRect.right < sphereRect.left || 
+             shotRect.left > sphereRect.right || 
+             shotRect.bottom < sphereRect.top || 
+             shotRect.top > sphereRect.bottom);
+}
+
+function endGame() {
+    gameActive = false;
+    alert(`¡Fin del juego! Puntos alcanzados: ${score}`);
+    // Reiniciar o terminar el juego
+}
+
+function gameLoop() {
+    if (gameActive) {
+        moveSpheres();
+        requestAnimationFrame(gameLoop);
+    }
+}
+
+// Manejar clics o toques en la pantalla para mover la nave y disparar
+gameContainer.addEventListener('click', (e) => {
+    const touchX = e.clientX;
+    const touchY = e.clientY;
+    
+    nave.style.left = (touchX - 20) + 'px'; // Mover la nave hacia donde se toque
+    
+    createShot(touchX, touchY); // Disparar hacia donde se toque
+});
+
+gameLoop();
+</script>
+
+</body>
+</html>

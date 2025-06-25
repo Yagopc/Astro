@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Snake Game (Autoplay)</title>
+  <style>
+    body {
+      margin: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background-color: black;
+      color: white;
+      height: 100vh;
+    }
+    canvas {
+      border: 1px solid white;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas"></canvas>
+
+  <script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+
+    // Canvas size
+    canvas.width = 400;
+    canvas.height = 400;
+
+    const gridSize = 20; // Size of each square in the grid
+    let snake = [{ x: 200, y: 200 }]; // Snake starts in the center
+    let direction = "RIGHT"; // Initial direction
+    let food = getRandomPosition(); // Generate initial food
+    const gameSpeed = 150; // Lower value = faster game
+    let lastRenderTime = 0;
+
+    // Main game loop
+    function mainGameLoop(currentTime) {
+      window.requestAnimationFrame(mainGameLoop);
+
+      const timeSinceLastRender = currentTime - lastRenderTime;
+      if (timeSinceLastRender < gameSpeed) return;
+
+      lastRenderTime = currentTime;
+
+      gameLoop();
+    }
+
+    function gameLoop() {
+      // Determine the next move automatically
+      determineDirection();
+
+      // Move the snake
+      const head = { ...snake[0] };
+      switch (direction) {
+        case "UP":
+          head.y -= gridSize;
+          break;
+        case "DOWN":
+          head.y += gridSize;
+          break;
+        case "LEFT":
+          head.x -= gridSize;
+          break;
+        case "RIGHT":
+          head.x += gridSize;
+          break;
+      }
+
+      // Check for collisions (game can't lose in autoplay mode)
+      if (
+        head.x < 0 ||
+        head.y < 0 ||
+        head.x >= canvas.width ||
+        head.y >= canvas.height ||
+        snake.some(segment => segment.x === head.x && segment.y === head.y)
+      ) {
+        resetGame();
+        return;
+      }
+
+      // Check if snake eats food
+      if (head.x === food.x && head.y === food.y) {
+        food = getRandomPosition();
+      } else {
+        snake.pop(); // Remove the tail if no food eaten
+      }
+
+      snake.unshift(head); // Add new head
+
+      // Draw everything
+      ctx.fillStyle = "black";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Draw food
+      ctx.fillStyle = "red";
+      ctx.fillRect(food.x, food.y, gridSize, gridSize);
+
+      // Draw snake
+      ctx.fillStyle = "green";
+      snake.forEach(segment => {
+        ctx.fillRect(segment.x, segment.y, gridSize, gridSize);
+      });
+    }
+
+    function determineDirection() {
+      const path = findPathToFood();
+
+      if (path && path.length > 0) {
+        // Move towards the next step in the path
+        const nextStep = path[0];
+        const head = snake[0];
+
+        if (nextStep.x > head.x) direction = "RIGHT";
+        else if (nextStep.x < head.x) direction = "LEFT";
+        else if (nextStep.y > head.y) direction = "DOWN";
+        else if (nextStep.y < head.y) direction = "UP";
+      } else {
+        // Fallback to avoid collisions if no path exists
+        chooseSafeDirection();
+      }
+    }
+
+    function findPathToFood() {
+      const head = snake[0];
+      const queue = [{ position: head, path: [] }];
+      const visited = new Set();
+      visited.add(`${head.x},${head.y}`);
+
+      while (queue.length > 0) {
+        const { position, path } = queue.shift();
+
+        // If we reach the food, return the path
+        if (position.x === food.x && position.y === food.y) {
+          return path;
+        }
+
+        // Explore all possible moves
+        const moves = [
+          { x: position.x, y: position.y - gridSize, direction: "UP" },
+          { x: position.x, y: position.y + gridSize, direction: "DOWN" },
+          { x: position.x - gridSize, y: position.y, direction: "LEFT" },
+          { x: position.x + gridSize, y: position.y, direction: "RIGHT" },
+        ];
+
+        for (const move of moves) {
+          const key = `${move.x},${move.y}`;
+          if (
+            isSafeMove(move.x, move.y) &&
+            !visited.has(key)
+          ) {
+            visited.add(key);
+            queue.push({
+              position: { x: move.x, y: move.y },
+              path: [...path, { x: move.x, y: move.y }],
+            });
+          }
+        }
+      }
+
+      // No path found
+      return null;
+    }
+
+    function chooseSafeDirection() {
+      const head = snake[0];
+      const potentialDirections = [];
+
+      // Check each direction for safety
+      if (isSafeMove(head.x, head.y - gridSize) && direction !== "DOWN") {
+        potentialDirections.push("UP");
+      }
+      if (isSafeMove(head.x, head.y + gridSize) && direction !== "UP") {
+        potentialDirections.push("DOWN");
+      }
+      if (isSafeMove(head.x - gridSize, head.y) && direction !== "RIGHT") {
+        potentialDirections.push("LEFT");
+      }
+      if (isSafeMove(head.x + gridSize, head.y) && direction !== "LEFT") {
+        potentialDirections.push("RIGHT");
+      }
+
+      // Pick the first safe direction (default fallback)
+      if (potentialDirections.length > 0) {
+        direction = potentialDirections[0];
+      }
+    }
+
+    function isSafeMove(x, y) {
+      return (
+        x >= 0 &&
+        y >= 0 &&
+        x < canvas.width &&
+        y < canvas.height &&
+        !snake.some(segment => segment.x === x && segment.y === y)
+      );
+    }
+
+    function getRandomPosition() {
+      const x = Math.floor(Math.random() * (canvas.width / gridSize)) * gridSize;
+      const y = Math.floor(Math.random() * (canvas.height / gridSize)) * gridSize;
+      return { x, y };
+    }
+
+    function resetGame() {
+      snake = [{ x: 200, y: 200 }];
+      direction = "RIGHT";
+      food = getRandomPosition();
+    }
+
+    window.requestAnimationFrame(mainGameLoop);
+  </script>
+</body>
+</html>
